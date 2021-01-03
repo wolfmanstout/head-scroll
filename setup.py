@@ -13,6 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/wolfmanstout/head-scroll",
     packages=["head_scroll"],
+    # Relies implicitly on gaze-ocr interfaces, but all dependencies are injected.
     install_requires=[
     ],
     classifiers=[
