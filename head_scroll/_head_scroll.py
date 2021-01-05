@@ -6,9 +6,9 @@ class Scroller(object):
     def __init__(self,
                  eye_tracker,
                  mouse,
-                 start_threshold=0.075,
+                 start_threshold=0.06,
                  fast_threshold=0.2,
-                 stop_threshold=0.02,
+                 stop_threshold=0.01,
                  scroll_period=0.2):
         self.eye_tracker = eye_tracker
         self.mouse = mouse
