@@ -16,15 +16,15 @@ class Scroller(object):
     def __init__(self,
                  eye_tracker,
                  mouse,
-                 up_threshold=0.2,
-                 up_fast_threshold=0.4,
+                 up_threshold=0.15,
+                 up_fast_threshold=0.35,
                  down_threshold=0.15,
                  down_fast_threshold=0.35,
                  stop_threshold=0.1,
                  shake_threshold=0.2,
                  check_frequency=20,
                  scroll_frequency=5,
-                 smooth_frequency=5):
+                 smooth_frequency=4):
         """Note: check_frequency must be a multiple of scroll_frequency and
         smooth_frequency.
         """
