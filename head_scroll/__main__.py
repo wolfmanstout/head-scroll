@@ -5,10 +5,64 @@ import sys
 import gaze_ocr
 import head_scroll
 
-scroller = head_scroll.Scroller(
-    gaze_ocr.eye_tracking.EyeTracker.get_connected_instance(sys.argv[1]),
-    gaze_ocr._dragonfly_wrappers.Mouse())
-input("Press Enter to start scrolling...")
-scroller.start()
-input("Press Enter to stop scrolling...")
-scroller.stop()
+from PySide2 import QtCore, QtGui, QtWidgets
+
+
+class Visualization(QtWidgets.QWidget):
+    def __init__(self, parent, scroller):
+        QtWidgets.QWidget.__init__(self, parent)
+        self.setFixedSize(200, 200)
+        self.setPalette(QtGui.QPalette(QtGui.QColor(255, 255, 255)))
+        self.setAutoFillBackground(True)
+        self.scroller = scroller
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtCore.Qt.black)
+        painter.translate(100, 100)
+        x = -self.scroller.y_velocity * 100
+        y = -self.scroller.x_velocity * 100
+        painter.drawPie(QtCore.QRect(x, y, 2, 2), 0, 16 * 360)
+
+
+class Overlay(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        QtWidgets.QWidget.__init__(self, parent)
+
+        self.scroller = head_scroll.Scroller(
+            gaze_ocr.eye_tracking.EyeTracker.get_connected_instance(sys.argv[1]),
+            gaze_ocr._dragonfly_wrappers.Mouse())
+
+        self.start_button = QtWidgets.QPushButton("Start", self)
+        self.quit_button = QtWidgets.QPushButton("Quit", self)
+        self.visualization = Visualization(self, self.scroller)
+        self.timer = QtCore.QTimer(self)
+        self.connect(self.start_button, QtCore.SIGNAL("clicked()"),
+                     self.start)
+        self.connect(self.quit_button, QtCore.SIGNAL("clicked()"),
+                     self.quit)
+        self.connect(self.timer, QtCore.SIGNAL("timeout()"),
+                     self.visualization.update)
+        self.timer.start(10)
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.start_button)
+        layout.addWidget(self.quit_button)
+        layout.addWidget(self.visualization)
+        self.setLayout(layout)
+
+    @QtCore.Slot()
+    def start(self):
+        self.scroller.start()
+
+    @QtCore.Slot()
+    def quit(self):
+        self.scroller.stop()
+        qApp.quit()
+
+
+app = QtWidgets.QApplication(sys.argv)
+widget = Overlay()
+widget.show()
+sys.exit(app.exec_())

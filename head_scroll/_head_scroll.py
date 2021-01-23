@@ -41,6 +41,10 @@ class Scroller(object):
         self.smooth_frequency = smooth_frequency
         self._stop_event = None
 
+        # For visualization.
+        self.x_velocity = 0
+        self.y_velocity = 0
+
     def start(self):
         if self._stop_event:
             return
@@ -76,6 +80,8 @@ class Scroller(object):
             if len(recent_rotations) == smooth_multiple:
                 x_velocity = (rotation[0] - recent_rotations[0][0]) / smooth_period
                 y_velocity = (rotation[1] - recent_rotations[0][1]) / smooth_period
+                self.x_velocity = x_velocity
+                self.y_velocity = y_velocity
 
                 if state == ScrollState.NOT_SCROLLING:
                     if x_velocity > self.up_threshold:
