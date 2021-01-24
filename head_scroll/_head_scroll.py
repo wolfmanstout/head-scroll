@@ -4,36 +4,24 @@ import time
 from collections import deque
 
 
-class ScrollState:
-    NOT_SCROLLING = 1
-    SCROLLING_DOWN = 2
-    STOPPING_SCROLLING_DOWN = 3
-    SCROLLING_UP = 4
-    STOPPING_SCROLLING_UP = 5
-
-
 class Scroller(object):
     def __init__(self,
                  eye_tracker,
                  mouse,
-                 up_threshold=0.15,
-                 up_fast_threshold=0.35,
-                 down_threshold=0.15,
-                 down_fast_threshold=0.35,
+                 up_threshold=0.1,
+                 down_threshold=0.1,
                  stop_threshold=0.1,
-                 shake_threshold=0.2,
+                 shake_threshold=0.3,
                  check_frequency=20,
                  scroll_frequency=5,
-                 smooth_frequency=4):
+                 smooth_frequency=10):
         """Note: check_frequency must be a multiple of scroll_frequency and
         smooth_frequency.
         """
         self.eye_tracker = eye_tracker
         self.mouse = mouse
         self.up_threshold = up_threshold
-        self.up_fast_threshold = up_fast_threshold
         self.down_threshold = down_threshold
-        self.down_fast_threshold = down_fast_threshold
         self.stop_threshold = stop_threshold
         self.shake_threshold = shake_threshold
         self.check_frequency = check_frequency
@@ -42,6 +30,9 @@ class Scroller(object):
         self._stop_event = None
 
         # For visualization.
+        self.rotation = (0, 0, 0)
+        self.reference_x = 0
+        self.smooth_x = 0
         self.x_velocity = 0
         self.y_velocity = 0
 
@@ -64,58 +55,47 @@ class Scroller(object):
         self._stop_event = None
 
     def _run(self, stop_event):
-        state = ScrollState.NOT_SCROLLING
         check_period = 1.0 / self.check_frequency
-        period_count = 0
+        scroll_period_count = 0
         scroll_multiple = self.check_frequency // self.scroll_frequency
         smooth_multiple = self.check_frequency // self.smooth_frequency
         smooth_period = 1.0 / self.smooth_frequency
         recent_rotations = deque(maxlen=smooth_multiple)
-        recent_rotations.append(self.eye_tracker.get_head_rotation_or_default())
+        rotation = self.eye_tracker.get_head_rotation_or_default()
+        recent_rotations.append(rotation)
+        smooth_x = rotation[0] / smooth_multiple
+        reference_x = rotation[0]
         while not stop_event.is_set():
             time.sleep(check_period)
-            period_count += 1
 
             rotation = self.eye_tracker.get_head_rotation_or_default()
+            smooth_x += rotation[0] / smooth_multiple
             if len(recent_rotations) == smooth_multiple:
+                smooth_x -= recent_rotations[0][0] / smooth_multiple
                 x_velocity = (rotation[0] - recent_rotations[0][0]) / smooth_period
                 y_velocity = (rotation[1] - recent_rotations[0][1]) / smooth_period
+                if abs(y_velocity) > self.shake_threshold:
+                    reference_x = rotation[0]
+                relative_x = smooth_x - reference_x
+
+                # Snapshot variables for visualization.
+                self.rotation = rotation
+                self.reference_x = reference_x
+                self.smooth_x = smooth_x
                 self.x_velocity = x_velocity
                 self.y_velocity = y_velocity
 
-                if state == ScrollState.NOT_SCROLLING:
-                    if x_velocity > self.up_threshold:
-                        state = ScrollState.SCROLLING_UP
-                        speed = 1
-                    elif x_velocity < -self.down_threshold:
-                        state = ScrollState.SCROLLING_DOWN
-                        speed = 1
-                elif state == ScrollState.SCROLLING_UP:
-                    if x_velocity < -self.stop_threshold:
-                        state = ScrollState.STOPPING_SCROLLING_UP
-                elif state == ScrollState.SCROLLING_DOWN:
-                    if x_velocity > self.stop_threshold:
-                        state = ScrollState.STOPPING_SCROLLING_DOWN
-                elif state == ScrollState.STOPPING_SCROLLING_UP:
-                    if x_velocity > -self.stop_threshold:
-                        state = ScrollState.NOT_SCROLLING
-                elif state == ScrollState.STOPPING_SCROLLING_DOWN:
-                    if x_velocity < self.stop_threshold:
-                        state = ScrollState.NOT_SCROLLING
+                if relative_x > self.up_threshold and x_velocity > -self.stop_threshold:
+                    if scroll_period_count == 0:
+                        speed = round(relative_x / self.up_threshold)
+                        self.mouse.scroll_up(speed)
+                    scroll_period_count = (scroll_period_count + 1) % scroll_multiple
+                elif relative_x < -self.down_threshold and x_velocity < self.stop_threshold:
+                    if scroll_period_count == 0:
+                        speed = round(relative_x / -self.down_threshold)
+                        self.mouse.scroll_down(speed)
+                    scroll_period_count = (scroll_period_count + 1) % scroll_multiple
+                else:
+                    scroll_period_count = 0
 
-                if abs(y_velocity) > self.shake_threshold:
-                    state = ScrollState.NOT_SCROLLING
-
-            if period_count == scroll_multiple:
-                period_count = 0
-                if state == ScrollState.SCROLLING_UP:
-                    # Use the maximum velocity observed while scrolling.
-                    if x_velocity > self.up_fast_threshold:
-                        speed = 4
-                    self.mouse.scroll_up(speed)
-                elif state == ScrollState.SCROLLING_DOWN:
-                    if x_velocity < -self.down_fast_threshold:
-                        speed = 4
-                    self.mouse.scroll_down(speed)
-                
             recent_rotations.append(rotation)

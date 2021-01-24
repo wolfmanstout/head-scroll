@@ -21,14 +21,24 @@ class Visualization(QtWidgets.QWidget):
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(QtCore.Qt.black)
         painter.translate(100, 100)
-        x = -self.scroller.y_velocity * 100
-        y = -self.scroller.x_velocity * 100
+        scale = 100
+        x = -self.scroller.rotation[1] * scale
+        y = -self.scroller.smooth_x * scale
         painter.drawPie(QtCore.QRect(x, y, 2, 2), 0, 16 * 360)
+        painter.setPen(QtCore.Qt.green)
+        painter.drawLine(-100, -self.scroller.reference_x * scale,
+                         100, -self.scroller.reference_x * scale)
+        painter.setPen(QtCore.Qt.red)
+        painter.drawLine(-100, -(self.scroller.reference_x + self.scroller.up_threshold) * scale,
+                         100, -(self.scroller.reference_x + self.scroller.up_threshold) * scale)
+        painter.drawLine(-100, -(self.scroller.reference_x - self.scroller.down_threshold) * scale,
+                         100, -(self.scroller.reference_x - self.scroller.down_threshold) * scale)
 
 
 class Overlay(QtWidgets.QWidget):
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowStaysOnTopHint)
 
         self.scroller = head_scroll.Scroller(
             gaze_ocr.eye_tracking.EyeTracker.get_connected_instance(sys.argv[1]),
