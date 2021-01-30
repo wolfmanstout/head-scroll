@@ -21,7 +21,7 @@ class Visualization(QtWidgets.QWidget):
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(QtCore.Qt.black)
         painter.translate(100, 100)
-        scale = 100
+        scale = 200
         x = -self.scroller.rotation[1] * scale
         y = -self.scroller.smooth_x * scale
         painter.drawPie(QtCore.QRect(x, y, 2, 2), 0, 16 * 360)
