@@ -11,7 +11,7 @@ class Scroller(object):
                  up_threshold=0.1,
                  down_threshold=0.1,
                  stop_threshold=0.1,
-                 shake_threshold=0.3,
+                 shake_threshold=0.4,
                  check_frequency=20,
                  scroll_frequency=5,
                  smooth_frequency=10):
@@ -87,12 +87,12 @@ class Scroller(object):
 
                 if relative_x > self.up_threshold and x_velocity > -self.stop_threshold:
                     if scroll_period_count == 0:
-                        speed = round(relative_x / self.up_threshold)
+                        speed = 2 ** round(relative_x / self.up_threshold - 1)
                         self.mouse.scroll_up(speed)
                     scroll_period_count = (scroll_period_count + 1) % scroll_multiple
                 elif relative_x < -self.down_threshold and x_velocity < self.stop_threshold:
                     if scroll_period_count == 0:
-                        speed = round(relative_x / -self.down_threshold)
+                        speed = 2 ** round(relative_x / -self.down_threshold - 1)
                         self.mouse.scroll_down(speed)
                     scroll_period_count = (scroll_period_count + 1) % scroll_multiple
                 else:
