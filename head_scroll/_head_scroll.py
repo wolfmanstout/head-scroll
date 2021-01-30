@@ -75,6 +75,8 @@ class Scroller(object):
                 x_velocity = (rotation[0] - recent_rotations[0][0]) / smooth_period
                 y_velocity = (rotation[1] - recent_rotations[0][1]) / smooth_period
                 if abs(y_velocity) > self.shake_threshold:
+                    start_gaze = self.eye_tracker.get_gaze_point_or_default()
+                    self.mouse.move((int(start_gaze[0]), int(start_gaze[1])))
                     reference_x = rotation[0]
                 relative_x = smooth_x - reference_x
 
