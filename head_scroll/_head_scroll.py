@@ -12,6 +12,7 @@ class Scroller(object):
                  down_threshold=0.1,
                  stop_threshold=0.1,
                  shake_threshold=0.4,
+                 gaze_threshold=50,
                  check_frequency=20,
                  scroll_frequency=5,
                  smooth_frequency=10):
@@ -24,6 +25,8 @@ class Scroller(object):
         self.down_threshold = down_threshold
         self.stop_threshold = stop_threshold
         self.shake_threshold = shake_threshold
+        self.gaze_threshold = gaze_threshold
+        self._gaze_threshold_squared = gaze_threshold * gaze_threshold
         self.check_frequency = check_frequency
         self.scroll_frequency = scroll_frequency
         self.smooth_frequency = smooth_frequency
@@ -68,23 +71,34 @@ class Scroller(object):
         recent_gaze = deque(maxlen=smooth_multiple)
         gaze = self.eye_tracker.get_gaze_point_or_default()
         recent_gaze.append(gaze)
-        smooth_gaze = [gaze[0] / smooth_multiple, gaze[1] / smooth_multiple]
+        smooth_gaze = (gaze[0] / smooth_multiple, gaze[1] / smooth_multiple)
+        reference_gaze = gaze
         while not stop_event.is_set():
             time.sleep(check_period)
 
             rotation = self.eye_tracker.get_head_rotation_or_default()
             gaze = self.eye_tracker.get_gaze_point_or_default()
             smooth_x += rotation[0] / smooth_multiple
-            smooth_gaze[0] += gaze[0] / smooth_multiple
-            smooth_gaze[1] += gaze[1] / smooth_multiple
+            smooth_gaze = (smooth_gaze[0] + gaze[0] / smooth_multiple,
+                           smooth_gaze[1] + gaze[1] / smooth_multiple)
             if len(recent_rotations) == smooth_multiple:
                 smooth_x -= recent_rotations[0][0] / smooth_multiple
-                smooth_gaze[0] -= recent_gaze[0][0] / smooth_multiple
-                smooth_gaze[1] -= recent_gaze[0][1] / smooth_multiple
+                smooth_gaze = (smooth_gaze[0] - recent_gaze[0][0] / smooth_multiple,
+                               smooth_gaze[1] - recent_gaze[0][1] / smooth_multiple)
                 x_velocity = (rotation[0] - recent_rotations[0][0]) / smooth_period
                 y_velocity = (rotation[1] - recent_rotations[0][1]) / smooth_period
+                
+                # If the head is shaken left-to-right, reset the reference.
                 if abs(y_velocity) > self.shake_threshold:
-                    self.mouse.move((round(smooth_gaze[0]), round(smooth_gaze[1])))
+                    # self.mouse.move((round(smooth_gaze[0]), round(smooth_gaze[1])))
+                    reference_x = rotation[0]
+                relative_x = smooth_x - reference_x
+                # If gaze moves significantly while inside the neutral zone, reset the reference.
+                if (relative_x <= self.up_threshold
+                    and relative_x >= -self.down_threshold
+                    and self._distance_squared(smooth_gaze, reference_gaze) > self._gaze_threshold_squared):
+                    # self.mouse.move((round(smooth_gaze[0]), round(smooth_gaze[1])))
+                    reference_gaze = smooth_gaze
                     reference_x = rotation[0]
                 relative_x = smooth_x - reference_x
 
@@ -110,3 +124,9 @@ class Scroller(object):
 
             recent_rotations.append(rotation)
             recent_gaze.append(gaze)
+
+    @staticmethod
+    def _distance_squared(gaze1, gaze2):
+        x_diff = gaze2[0] - gaze1[0]
+        y_diff = gaze2[1] - gaze1[1]
+        return x_diff * x_diff + y_diff * y_diff
