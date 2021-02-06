@@ -41,7 +41,7 @@ class Scroller(object):
             return
         # Move cursor so we scroll in the right window.
         start_gaze = self.eye_tracker.get_gaze_point_or_default()
-        self.mouse.move((int(start_gaze[0]), int(start_gaze[1])))
+        self.mouse.move((round(start_gaze[0]), round(start_gaze[1])))
         stop_event = threading.Event()
         thread = threading.Thread(target=lambda: self._run(stop_event))
         thread.setDaemon(True)
@@ -65,18 +65,26 @@ class Scroller(object):
         recent_rotations.append(rotation)
         smooth_x = rotation[0] / smooth_multiple
         reference_x = rotation[0]
+        recent_gaze = deque(maxlen=smooth_multiple)
+        gaze = self.eye_tracker.get_gaze_point_or_default()
+        recent_gaze.append(gaze)
+        smooth_gaze = [gaze[0] / smooth_multiple, gaze[1] / smooth_multiple]
         while not stop_event.is_set():
             time.sleep(check_period)
 
             rotation = self.eye_tracker.get_head_rotation_or_default()
+            gaze = self.eye_tracker.get_gaze_point_or_default()
             smooth_x += rotation[0] / smooth_multiple
+            smooth_gaze[0] += gaze[0] / smooth_multiple
+            smooth_gaze[1] += gaze[1] / smooth_multiple
             if len(recent_rotations) == smooth_multiple:
                 smooth_x -= recent_rotations[0][0] / smooth_multiple
+                smooth_gaze[0] -= recent_gaze[0][0] / smooth_multiple
+                smooth_gaze[1] -= recent_gaze[0][1] / smooth_multiple
                 x_velocity = (rotation[0] - recent_rotations[0][0]) / smooth_period
                 y_velocity = (rotation[1] - recent_rotations[0][1]) / smooth_period
                 if abs(y_velocity) > self.shake_threshold:
-                    start_gaze = self.eye_tracker.get_gaze_point_or_default()
-                    self.mouse.move((int(start_gaze[0]), int(start_gaze[1])))
+                    self.mouse.move((round(smooth_gaze[0]), round(smooth_gaze[1])))
                     reference_x = rotation[0]
                 relative_x = smooth_x - reference_x
 
@@ -101,3 +109,4 @@ class Scroller(object):
                     scroll_period_count = 0
 
             recent_rotations.append(rotation)
+            recent_gaze.append(gaze)
