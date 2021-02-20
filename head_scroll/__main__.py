@@ -16,6 +16,10 @@ class Visualization(QtWidgets.QWidget):
         self.setAutoFillBackground(True)
         self.scroller = scroller
 
+    @staticmethod
+    def _draw_horizontal_line(painter, y):
+        painter.drawLine(-100, y, 100, y)
+
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         painter.setPen(QtCore.Qt.NoPen)
@@ -23,16 +27,15 @@ class Visualization(QtWidgets.QWidget):
         painter.translate(100, 100)
         scale = 200
         x = -self.scroller.rotation[1] * scale
-        y = -self.scroller.smooth_x * scale
+        y = -self.scroller.smooth_pitch * scale
         painter.drawPie(QtCore.QRect(x, y, 2, 2), 0, 16 * 360)
         painter.setPen(QtCore.Qt.green)
-        painter.drawLine(-100, -self.scroller.reference_x * scale,
-                         100, -self.scroller.reference_x * scale)
+        self._draw_horizontal_line(painter, -self.scroller.expected_pitch * scale)
+        painter.setPen(QtCore.Qt.blue)
+        self._draw_horizontal_line(painter, -self.scroller.pinned_pitch * scale)
         painter.setPen(QtCore.Qt.red)
-        painter.drawLine(-100, -(self.scroller.reference_x + self.scroller.up_threshold) * scale,
-                         100, -(self.scroller.reference_x + self.scroller.up_threshold) * scale)
-        painter.drawLine(-100, -(self.scroller.reference_x - self.scroller.down_threshold) * scale,
-                         100, -(self.scroller.reference_x - self.scroller.down_threshold) * scale)
+        self._draw_horizontal_line(painter, -self.scroller.min_pitch * scale)
+        self._draw_horizontal_line(painter, -self.scroller.max_pitch * scale)
 
 
 class Overlay(QtWidgets.QWidget):

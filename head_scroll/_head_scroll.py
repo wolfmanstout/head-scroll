@@ -4,15 +4,20 @@ import time
 from collections import deque
 
 
+class ScrollState:
+    NOT_SCROLLING = 1
+    SCROLLING_DOWN = 2
+    SCROLLING_UP = 3
+
+
 class Scroller(object):
     def __init__(self,
                  eye_tracker,
                  mouse,
-                 up_threshold=0.1,
-                 down_threshold=0.1,
+                 gaze_alignment_threshold=0.075,
+                 misaligned_pitch_velocity_threshold=0.05,
                  stop_threshold=0.1,
                  shake_threshold=0.4,
-                 gaze_threshold=50,
                  check_frequency=20,
                  scroll_frequency=5,
                  smooth_frequency=10):
@@ -21,12 +26,10 @@ class Scroller(object):
         """
         self.eye_tracker = eye_tracker
         self.mouse = mouse
-        self.up_threshold = up_threshold
-        self.down_threshold = down_threshold
+        self.gaze_alignment_threshold = gaze_alignment_threshold
+        self.misaligned_pitch_velocity_threshold = misaligned_pitch_velocity_threshold
         self.stop_threshold = stop_threshold
         self.shake_threshold = shake_threshold
-        self.gaze_threshold = gaze_threshold
-        self._gaze_threshold_squared = gaze_threshold * gaze_threshold
         self.check_frequency = check_frequency
         self.scroll_frequency = scroll_frequency
         self.smooth_frequency = smooth_frequency
@@ -34,10 +37,13 @@ class Scroller(object):
 
         # For visualization.
         self.rotation = (0, 0, 0)
-        self.reference_x = 0
-        self.smooth_x = 0
-        self.x_velocity = 0
-        self.y_velocity = 0
+        self.smooth_pitch = 0
+        self.pitch_velocity = 0
+        self.yaw_velocity = 0
+        self.expected_pitch = 0
+        self.pinned_pitch = 0
+        self.min_pitch = 0
+        self.max_pitch = 0
 
     def start(self):
         if self._stop_event:
@@ -66,57 +72,76 @@ class Scroller(object):
         recent_rotations = deque(maxlen=smooth_multiple)
         rotation = self.eye_tracker.get_head_rotation_or_default()
         recent_rotations.append(rotation)
-        smooth_x = rotation[0] / smooth_multiple
-        reference_x = rotation[0]
+        smooth_pitch = rotation[0] / smooth_multiple
+        pinned_pitch = rotation[0]
         recent_gaze = deque(maxlen=smooth_multiple)
         gaze = self.eye_tracker.get_gaze_point_or_default()
         recent_gaze.append(gaze)
         smooth_gaze = (gaze[0] / smooth_multiple, gaze[1] / smooth_multiple)
-        reference_gaze = gaze
+        state = ScrollState.NOT_SCROLLING
         while not stop_event.is_set():
             time.sleep(check_period)
 
             rotation = self.eye_tracker.get_head_rotation_or_default()
             gaze = self.eye_tracker.get_gaze_point_or_default()
-            smooth_x += rotation[0] / smooth_multiple
+            smooth_pitch += rotation[0] / smooth_multiple
             smooth_gaze = (smooth_gaze[0] + gaze[0] / smooth_multiple,
                            smooth_gaze[1] + gaze[1] / smooth_multiple)
             if len(recent_rotations) == smooth_multiple:
-                smooth_x -= recent_rotations[0][0] / smooth_multiple
+                smooth_pitch -= recent_rotations[0][0] / smooth_multiple
                 smooth_gaze = (smooth_gaze[0] - recent_gaze[0][0] / smooth_multiple,
                                smooth_gaze[1] - recent_gaze[0][1] / smooth_multiple)
-                x_velocity = (rotation[0] - recent_rotations[0][0]) / smooth_period
-                y_velocity = (rotation[1] - recent_rotations[0][1]) / smooth_period
-                
-                # If the head is shaken left-to-right, reset the reference.
-                if abs(y_velocity) > self.shake_threshold:
-                    # self.mouse.move((round(smooth_gaze[0]), round(smooth_gaze[1])))
-                    reference_x = rotation[0]
-                relative_x = smooth_x - reference_x
-                # If gaze moves significantly while inside the neutral zone, reset the reference.
-                if (relative_x <= self.up_threshold
-                    and relative_x >= -self.down_threshold
-                    and self._distance_squared(smooth_gaze, reference_gaze) > self._gaze_threshold_squared):
-                    # self.mouse.move((round(smooth_gaze[0]), round(smooth_gaze[1])))
-                    reference_gaze = smooth_gaze
-                    reference_x = rotation[0]
-                relative_x = smooth_x - reference_x
+                pitch_velocity = (rotation[0] - recent_rotations[0][0]) / smooth_period
+                yaw_velocity = (rotation[1] - recent_rotations[0][1]) / smooth_period
+
+                # Update thresholds based on gaze if not scrolling.
+                if state == ScrollState.NOT_SCROLLING:
+                    expected_pitch = self._get_expected_pitch(smooth_gaze)
+                    if not(pinned_pitch < expected_pitch and smooth_pitch < pinned_pitch or
+                           pinned_pitch > expected_pitch and smooth_pitch > pinned_pitch):
+                        # Eye and gaze movements are aligned, so we keep pitch in bounds.
+                        # This allows pitch to lag gaze.
+                        pinned_pitch = smooth_pitch
+
+                    min_pitch = min(expected_pitch - self.gaze_alignment_threshold,
+                                    pinned_pitch - self.misaligned_pitch_velocity_threshold)
+                    max_pitch = max(expected_pitch + self.gaze_alignment_threshold,
+                                    pinned_pitch + self.misaligned_pitch_velocity_threshold)
 
                 # Snapshot variables for visualization.
                 self.rotation = rotation
-                self.reference_x = reference_x
-                self.smooth_x = smooth_x
-                self.x_velocity = x_velocity
-                self.y_velocity = y_velocity
+                self.smooth_pitch = smooth_pitch
+                self.pitch_velocity = pitch_velocity
+                self.yaw_velocity = yaw_velocity
+                self.expected_pitch = expected_pitch
+                self.pinned_pitch = pinned_pitch
+                self.min_pitch = min_pitch
+                self.max_pitch = max_pitch
 
-                if relative_x > self.up_threshold and x_velocity > -self.stop_threshold:
+                # Update state.
+                if smooth_pitch > max_pitch:
+                    state = ScrollState.SCROLLING_UP
+                elif smooth_pitch < min_pitch:
+                    state = ScrollState.SCROLLING_DOWN
+                else:
+                    if state != ScrollState.NOT_SCROLLING:
+                        # Reset pinned pitch so we don't start scrolling again.
+                        pinned_pitch = smooth_pitch
+                    state = ScrollState.NOT_SCROLLING
+
+                # if abs(yaw_velocity) > self.shake_threshold:
+                #     pinned_pitch = smooth_pitch
+                #     state = ScrollState.NOT_SCROLLING
+
+                # Perform scrolling. Pause if pitch is moving in the wrong direction.
+                if state == ScrollState.SCROLLING_UP and pitch_velocity > -self.stop_threshold:
                     if scroll_period_count == 0:
-                        speed = 2 ** round(relative_x / self.up_threshold - 1)
+                        speed = 2 ** round((smooth_pitch - max_pitch) / self.gaze_alignment_threshold)
                         self.mouse.scroll_up(speed)
                     scroll_period_count = (scroll_period_count + 1) % scroll_multiple
-                elif relative_x < -self.down_threshold and x_velocity < self.stop_threshold:
+                elif state == ScrollState.SCROLLING_DOWN and pitch_velocity < self.stop_threshold:
                     if scroll_period_count == 0:
-                        speed = 2 ** round(relative_x / -self.down_threshold - 1)
+                        speed = 2 ** round((min_pitch - smooth_pitch) / self.gaze_alignment_threshold)
                         self.mouse.scroll_down(speed)
                     scroll_period_count = (scroll_period_count + 1) % scroll_multiple
                 else:
@@ -126,7 +151,11 @@ class Scroller(object):
             recent_gaze.append(gaze)
 
     @staticmethod
-    def _distance_squared(gaze1, gaze2):
-        x_diff = gaze2[0] - gaze1[0]
-        y_diff = gaze2[1] - gaze1[1]
-        return x_diff * x_diff + y_diff * y_diff
+    def _get_expected_pitch(gaze):
+        # Determined experimentally.
+        expected_pitch_min = 0.05
+        expected_pitch_max = 0.20
+
+        fraction = gaze[1] / 1080.0
+        fraction = min(max(fraction, 0), 1)
+        return (1 - fraction) * expected_pitch_max + fraction * expected_pitch_min
