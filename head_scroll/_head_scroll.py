@@ -153,8 +153,8 @@ class Scroller(object):
     @staticmethod
     def _get_expected_pitch(gaze):
         # Determined experimentally.
-        expected_pitch_min = 0.05
-        expected_pitch_max = 0.20
+        expected_pitch_min = -0.1
+        expected_pitch_max = 0.05
 
         fraction = gaze[1] / 1080.0
         fraction = min(max(fraction, 0), 1)
