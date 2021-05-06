@@ -12,8 +12,6 @@ class Visualization(QtWidgets.QWidget):
     def __init__(self, parent, scroller):
         QtWidgets.QWidget.__init__(self, parent)
         self.setFixedSize(200, 200)
-        self.setPalette(QtGui.QPalette(QtGui.QColor(255, 255, 255)))
-        self.setAutoFillBackground(True)
         self.scroller = scroller
 
     @staticmethod
@@ -40,8 +38,17 @@ class Visualization(QtWidgets.QWidget):
 
 class Overlay(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        QtWidgets.QWidget.__init__(self, parent)
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowStaysOnTopHint)
+        super(Overlay, self).__init__(parent)
+        self.setWindowFlags(
+            self.windowFlags() |
+            QtCore.Qt.WindowStaysOnTopHint |
+            QtCore.Qt.FramelessWindowHint)
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
+        self.setGeometry(
+            QtWidgets.QStyle.alignedRect(
+                QtCore.Qt.LeftToRight, QtCore.Qt.AlignCenter,
+                QtCore.QSize(400, 400),
+                QtGui.QGuiApplication.primaryScreen().availableGeometry()))
 
         self.scroller = head_scroll.Scroller(
             gaze_ocr.eye_tracking.EyeTracker.get_connected_instance(sys.argv[1]),
@@ -65,6 +72,10 @@ class Overlay(QtWidgets.QWidget):
         layout.addWidget(self.visualization)
         self.setLayout(layout)
 
+    # Capture clicks on directly-painted overlay.
+    def mousePressEvent(self, event):
+        self.quit()
+
     @QtCore.Slot()
     def start(self):
         self.scroller.start()
@@ -72,7 +83,7 @@ class Overlay(QtWidgets.QWidget):
     @QtCore.Slot()
     def quit(self):
         self.scroller.stop()
-        qApp.quit()
+        QtWidgets.QApplication.instance().quit()
 
 
 app = QtWidgets.QApplication(sys.argv)
