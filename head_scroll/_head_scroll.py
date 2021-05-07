@@ -44,6 +44,7 @@ class Scroller(object):
         self.pinned_pitch = 0
         self.min_pitch = 0
         self.max_pitch = 0
+        self.is_scrolling = False
 
     def start(self):
         if self._stop_event:
@@ -108,16 +109,6 @@ class Scroller(object):
                     max_pitch = max(expected_pitch + self.gaze_alignment_threshold,
                                     pinned_pitch + self.misaligned_pitch_velocity_threshold)
 
-                # Snapshot variables for visualization.
-                self.rotation = rotation
-                self.smooth_pitch = smooth_pitch
-                self.pitch_velocity = pitch_velocity
-                self.yaw_velocity = yaw_velocity
-                self.expected_pitch = expected_pitch
-                self.pinned_pitch = pinned_pitch
-                self.min_pitch = min_pitch
-                self.max_pitch = max_pitch
-
                 # Update state.
                 if smooth_pitch > max_pitch:
                     state = ScrollState.SCROLLING_UP
@@ -134,18 +125,32 @@ class Scroller(object):
                 #     state = ScrollState.NOT_SCROLLING
 
                 # Perform scrolling. Pause if pitch is moving in the wrong direction.
+                is_scrolling = False
                 if state == ScrollState.SCROLLING_UP and pitch_velocity > -self.stop_threshold:
                     if scroll_period_count == 0:
                         speed = 2 ** round((smooth_pitch - max_pitch) / self.gaze_alignment_threshold)
                         self.mouse.scroll_up(speed)
                     scroll_period_count = (scroll_period_count + 1) % scroll_multiple
+                    is_scrolling = True
                 elif state == ScrollState.SCROLLING_DOWN and pitch_velocity < self.stop_threshold:
                     if scroll_period_count == 0:
                         speed = 2 ** round((min_pitch - smooth_pitch) / self.gaze_alignment_threshold)
                         self.mouse.scroll_down(speed)
                     scroll_period_count = (scroll_period_count + 1) % scroll_multiple
+                    is_scrolling = True
                 else:
                     scroll_period_count = 0
+
+                # Snapshot variables for visualization.
+                self.rotation = rotation
+                self.smooth_pitch = smooth_pitch
+                self.pitch_velocity = pitch_velocity
+                self.yaw_velocity = yaw_velocity
+                self.expected_pitch = expected_pitch
+                self.pinned_pitch = pinned_pitch
+                self.min_pitch = min_pitch
+                self.max_pitch = max_pitch
+                self.is_scrolling = is_scrolling
 
             recent_rotations.append(rotation)
             recent_gaze.append(gaze)

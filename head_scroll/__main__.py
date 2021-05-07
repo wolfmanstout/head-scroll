@@ -10,71 +10,79 @@ from PySide2 import QtCore, QtGui, QtWidgets
 
 class Visualization(QtWidgets.QWidget):
     def __init__(self, parent, scroller):
-        QtWidgets.QWidget.__init__(self, parent)
-        self.setFixedSize(200, 200)
+        super(Visualization, self).__init__(parent)
         self.scroller = scroller
+        self.timer = QtCore.QTimer(self)
+        self.connect(self.timer, QtCore.SIGNAL("timeout()"),
+                     self.update)
+        self.timer.start(10)
 
     @staticmethod
     def _draw_horizontal_line(painter, y):
-        painter.drawLine(-100, y, 100, y)
+        painter.drawLine(-10000, y, 10000, y)
 
     def paintEvent(self, event):
+        window = event.rect()
         painter = QtGui.QPainter(self)
+        painter.translate(window.center())
+        scale = 2000
+        line_width = 3
+        diameter = 5
+        # painter.setPen(QtGui.QPen(QtCore.Qt.green if self.scroller.is_scrolling else QtCore.Qt.blue,
+        #                           line_width))
+        # painter.drawLine(0, 0, 0, -(self.scroller.smooth_pitch - self.scroller.expected_pitch) * scale)
+        # painter.setPen(QtGui.QPen(QtCore.Qt.red, line_width))
+        # min_diff = self.scroller.min_pitch - self.scroller.expected_pitch
+        # max_diff = self.scroller.max_pitch - self.scroller.expected_pitch
+        # painter.drawLine(-line_width, -min_diff * scale,
+        #                  line_width, -min_diff * scale)
+        # painter.drawLine(-line_width, -max_diff * scale,
+        #                  line_width, -max_diff * scale)
         painter.setPen(QtCore.Qt.NoPen)
-        painter.setBrush(QtCore.Qt.black)
-        painter.translate(100, 100)
-        scale = 200
+        painter.setBrush(QtCore.Qt.gray)
         x = -self.scroller.rotation[1] * scale
         y = -self.scroller.smooth_pitch * scale
-        painter.drawPie(QtCore.QRect(x, y, 2, 2), 0, 16 * 360)
-        painter.setPen(QtCore.Qt.green)
+        painter.drawPie(QtCore.QRect(x, y, diameter, diameter), 0, 16 * 360)
+        painter.setPen(QtGui.QPen(QtCore.Qt.green, line_width))
         self._draw_horizontal_line(painter, -self.scroller.expected_pitch * scale)
-        painter.setPen(QtCore.Qt.blue)
+        painter.setPen(QtGui.QPen(QtCore.Qt.blue, line_width))
         self._draw_horizontal_line(painter, -self.scroller.pinned_pitch * scale)
-        painter.setPen(QtCore.Qt.red)
+        painter.setPen(QtGui.QPen(QtCore.Qt.red, line_width))
         self._draw_horizontal_line(painter, -self.scroller.min_pitch * scale)
         self._draw_horizontal_line(painter, -self.scroller.max_pitch * scale)
 
 
 class Overlay(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, scroller, parent=None):
         super(Overlay, self).__init__(parent)
+        self.scroller = scroller
+
         self.setWindowFlags(
             self.windowFlags() |
             QtCore.Qt.WindowStaysOnTopHint |
             QtCore.Qt.FramelessWindowHint)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
-        self.setGeometry(
-            QtWidgets.QStyle.alignedRect(
-                QtCore.Qt.LeftToRight, QtCore.Qt.AlignCenter,
-                QtCore.QSize(400, 400),
-                QtGui.QGuiApplication.primaryScreen().availableGeometry()))
+        self.setGeometry(QtGui.QGuiApplication.primaryScreen().availableGeometry())
 
-        self.scroller = head_scroll.Scroller(
-            gaze_ocr.eye_tracking.EyeTracker.get_connected_instance(sys.argv[1]),
-            gaze_ocr._dragonfly_wrappers.Mouse())
-
-        self.start_button = QtWidgets.QPushButton("Start", self)
-        self.quit_button = QtWidgets.QPushButton("Quit", self)
         self.visualization = Visualization(self, self.scroller)
-        self.timer = QtCore.QTimer(self)
-        self.connect(self.start_button, QtCore.SIGNAL("clicked()"),
-                     self.start)
-        self.connect(self.quit_button, QtCore.SIGNAL("clicked()"),
-                     self.quit)
-        self.connect(self.timer, QtCore.SIGNAL("timeout()"),
-                     self.visualization.update)
-        self.timer.start(10)
+        # self.start_button = QtWidgets.QPushButton("Start", self)
+        # self.quit_button = QtWidgets.QPushButton("Quit", self)
+        # self.connect(self.start_button, QtCore.SIGNAL("clicked()"),
+        #              self.start)
+        # self.connect(self.quit_button, QtCore.SIGNAL("clicked()"),
+        #              self.quit)
 
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.start_button)
-        layout.addWidget(self.quit_button)
+        # layout.addWidget(self.start_button)
+        # layout.addWidget(self.quit_button)
         layout.addWidget(self.visualization)
         self.setLayout(layout)
 
-    # Capture clicks on directly-painted overlay.
-    def mousePressEvent(self, event):
-        self.quit()
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key_S:
+            self.start()
+        elif event.key() == QtCore.Qt.Key_Q:
+            self.quit()
 
     @QtCore.Slot()
     def start(self):
@@ -87,6 +95,9 @@ class Overlay(QtWidgets.QWidget):
 
 
 app = QtWidgets.QApplication(sys.argv)
-widget = Overlay()
+scroller = head_scroll.Scroller(
+    gaze_ocr.eye_tracking.EyeTracker.get_connected_instance(sys.argv[1]),
+    gaze_ocr._dragonfly_wrappers.Mouse())
+widget = Overlay(scroller)
 widget.show()
 sys.exit(app.exec_())
