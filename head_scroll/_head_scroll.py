@@ -14,7 +14,7 @@ class Scroller(object):
     def __init__(self,
                  eye_tracker,
                  mouse,
-                 gaze_alignment_threshold=0.1,
+                 gaze_alignment_threshold=0.07,
                  misaligned_pitch_velocity_threshold=0.05,
                  stop_threshold=0.1,
                  shake_threshold=0.4,
@@ -36,6 +36,7 @@ class Scroller(object):
         self._stop_event = None
 
         # For visualization.
+        self.gaze = (0, 0)
         self.rotation = (0, 0, 0)
         self.smooth_pitch = 0
         self.pitch_velocity = 0
@@ -142,6 +143,7 @@ class Scroller(object):
                     scroll_period_count = 0
 
                 # Snapshot variables for visualization.
+                self.gaze = smooth_gaze
                 self.rotation = rotation
                 self.smooth_pitch = smooth_pitch
                 self.pitch_velocity = pitch_velocity
@@ -158,8 +160,8 @@ class Scroller(object):
     @staticmethod
     def _get_expected_pitch(gaze):
         # Determined experimentally.
-        expected_pitch_min = -0.1
-        expected_pitch_max = 0.05
+        expected_pitch_min = 0.07
+        expected_pitch_max = 0.12
 
         fraction = gaze[1] / 1080.0
         fraction = min(max(fraction, 0), 1)

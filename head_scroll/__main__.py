@@ -21,35 +21,55 @@ class Visualization(QtWidgets.QWidget):
     def _draw_horizontal_line(painter, y):
         painter.drawLine(-10000, y, 10000, y)
 
+    @staticmethod
+    def _with_alpha(color, alpha):
+        new_color = QtGui.QColor(color)
+        new_color.setAlphaF(alpha)
+        return new_color
+
     def paintEvent(self, event):
         window = event.rect()
         painter = QtGui.QPainter(self)
-        painter.translate(window.center())
-        scale = 2000
+        scroll = self.scroller
+        # Round to nearest bucket to avoid excessive movement.
+        center_x = round(scroll.gaze[0] / 250) * 250
+        center_x = min(window.right() - 100, max(window.left() + 100, center_x))
+        center_y = round(scroll.gaze[1] / 125) * 125
+        center_y = min(window.bottom() - 100, max(window.top() + 100, center_y))
+        painter.translate(center_x - window.left(), center_y - window.top())
+        clip_rect = QtCore.QRect(-100, -200, 200, 400)
+        painter.setClipRect(clip_rect)
+        scale = 500
         line_width = 3
         diameter = 5
-        # painter.setPen(QtGui.QPen(QtCore.Qt.green if self.scroller.is_scrolling else QtCore.Qt.blue,
+        # painter.setPen(QtCore.Qt.NoPen)
+        # painter.setBrush(QtCore.Qt.white)
+        # painter.drawRect(clip_rect)
+        # painter.setPen(QtGui.QPen(QtCore.Qt.green if scroll.is_scrolling else QtCore.Qt.blue,
         #                           line_width))
-        # painter.drawLine(0, 0, 0, -(self.scroller.smooth_pitch - self.scroller.expected_pitch) * scale)
+        # painter.drawLine(0, 0, 0, -(scroll.smooth_pitch - scroll.expected_pitch) * scale)
         # painter.setPen(QtGui.QPen(QtCore.Qt.red, line_width))
-        # min_diff = self.scroller.min_pitch - self.scroller.expected_pitch
-        # max_diff = self.scroller.max_pitch - self.scroller.expected_pitch
+        # min_diff = scroll.min_pitch - scroll.expected_pitch
+        # max_diff = scroll.max_pitch - scroll.expected_pitch
         # painter.drawLine(-line_width, -min_diff * scale,
         #                  line_width, -min_diff * scale)
         # painter.drawLine(-line_width, -max_diff * scale,
         #                  line_width, -max_diff * scale)
-        painter.setPen(QtCore.Qt.NoPen)
-        painter.setBrush(QtCore.Qt.gray)
-        x = -self.scroller.rotation[1] * scale
-        y = -self.scroller.smooth_pitch * scale
-        painter.drawPie(QtCore.QRect(x, y, diameter, diameter), 0, 16 * 360)
-        painter.setPen(QtGui.QPen(QtCore.Qt.green, line_width))
-        self._draw_horizontal_line(painter, -self.scroller.expected_pitch * scale)
-        painter.setPen(QtGui.QPen(QtCore.Qt.blue, line_width))
-        self._draw_horizontal_line(painter, -self.scroller.pinned_pitch * scale)
-        painter.setPen(QtGui.QPen(QtCore.Qt.red, line_width))
-        self._draw_horizontal_line(painter, -self.scroller.min_pitch * scale)
-        self._draw_horizontal_line(painter, -self.scroller.max_pitch * scale)
+        # painter.setPen(QtCore.Qt.NoPen)
+        # painter.setBrush(QtCore.Qt.gray)
+        # x = -scroll.rotation[1] * scale
+        # y = -scroll.smooth_pitch * scale
+        # painter.drawPie(QtCore.QRect(x - diameter / 2, y - diameter / 2, diameter, diameter), 0, 16 * 360)
+        alpha = 0.25
+        painter.setPen(QtGui.QPen(self._with_alpha(QtCore.Qt.blue, alpha), line_width))
+        self._draw_horizontal_line(painter, -scroll.smooth_pitch * scale)
+        painter.setPen(QtGui.QPen(self._with_alpha(QtCore.Qt.green, alpha), line_width))
+        self._draw_horizontal_line(painter, -scroll.expected_pitch * scale)
+        # painter.setPen(QtGui.QPen(QtCore.Qt.blue, line_width))
+        # self._draw_horizontal_line(painter, -scroll.pinned_pitch * scale)
+        painter.setPen(QtGui.QPen(self._with_alpha(QtCore.Qt.red, alpha), line_width))
+        self._draw_horizontal_line(painter, -scroll.min_pitch * scale)
+        self._draw_horizontal_line(painter, -scroll.max_pitch * scale)
 
 
 class Overlay(QtWidgets.QWidget):
