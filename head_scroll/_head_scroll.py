@@ -14,7 +14,8 @@ class Scroller(object):
     def __init__(self,
                  eye_tracker,
                  mouse,
-                 gaze_alignment_threshold=0.07,
+                 coefs=[-0.21, -0.11,  0.00043,  0.00055],
+                 gaze_alignment_threshold=0.1,
                  misaligned_pitch_velocity_threshold=0.05,
                  stop_threshold=0.1,
                  shake_threshold=0.4,
@@ -26,6 +27,7 @@ class Scroller(object):
         """
         self.eye_tracker = eye_tracker
         self.mouse = mouse
+        self.coefs = coefs
         self.gaze_alignment_threshold = gaze_alignment_threshold
         self.misaligned_pitch_velocity_threshold = misaligned_pitch_velocity_threshold
         self.stop_threshold = stop_threshold
@@ -85,6 +87,7 @@ class Scroller(object):
             time.sleep(check_period)
 
             rotation = self.eye_tracker.get_head_rotation_or_default()
+            head_position = self.eye_tracker.get_head_position_or_default()
             gaze = self.eye_tracker.get_gaze_point_or_default()
             smooth_pitch += rotation[0] / smooth_multiple
             smooth_gaze = (smooth_gaze[0] + gaze[0] / smooth_multiple,
@@ -98,7 +101,11 @@ class Scroller(object):
 
                 # Update thresholds based on gaze if not scrolling.
                 if state == ScrollState.NOT_SCROLLING:
-                    expected_pitch = self._get_expected_pitch(smooth_gaze)
+                    monitor_size = self.eye_tracker.get_monitor_size()
+                    expected_pitch = (self.coefs[0] +
+                                      self.coefs[1] * (smooth_gaze[1] / monitor_size[1]) +
+                                      self.coefs[2] * head_position[1] +
+                                      self.coefs[3] * head_position[2])
                     if not(pinned_pitch < expected_pitch and smooth_pitch < pinned_pitch or
                            pinned_pitch > expected_pitch and smooth_pitch > pinned_pitch):
                         # Eye and gaze movements are aligned, so we keep pitch in bounds.
@@ -156,13 +163,3 @@ class Scroller(object):
 
             recent_rotations.append(rotation)
             recent_gaze.append(gaze)
-
-    @staticmethod
-    def _get_expected_pitch(gaze):
-        # Determined experimentally.
-        expected_pitch_min = 0.07
-        expected_pitch_max = 0.12
-
-        fraction = gaze[1] / 1080.0
-        fraction = min(max(fraction, 0), 1)
-        return (1 - fraction) * expected_pitch_max + fraction * expected_pitch_min
