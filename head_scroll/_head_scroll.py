@@ -14,7 +14,7 @@ class Scroller(object):
     def __init__(self,
                  eye_tracker,
                  mouse,
-                 coefs=[-0.21, -0.11,  0.00043,  0.00055],
+                 coefs=[-0.17, -0.082, -0.0025, 0.00072],
                  gaze_alignment_threshold=0.1,
                  misaligned_pitch_velocity_threshold=0.05,
                  stop_threshold=0.1,
